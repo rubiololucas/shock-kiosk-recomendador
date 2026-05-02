@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>SHOCK · KIOSK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quantico:wght@400;700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ==================================================================
+   SHOCK · KIOSK · v4
+   Refactor profundo: container queries (cqi) en vez de vw, todos los
+   counts caen en 2×2 vertical, tiles cuadrados, fonts bigger en portrait.
+   ================================================================== */
+:root {
+  --bg: #0a0807;
+  --bg-elev: #14110f;
+  --fg: #f2efe9;
+  --fg-soft: #b8b3a8;
+  --fg-dim: #6e6960;
+  --hairline: #1f1c19;
+  --accent: #fafafa;
+  --accent-glow: rgba(255,255,255,.6);
+  --ca-r: #ff003c;
+  --ca-c: #00ddff;
+
+  --display: 'Quantico', 'Space Grotesk', system-ui, sans-serif;
+  --body: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --ease: cubic-bezier(.16, 1, .3, 1);
+}
+[data-theme="light"] {
+  --bg: #faf9f5;
+  --bg-elev: #f0eee9;
+  --fg: #0a0807;
+  --fg-soft: #4a4640;
+  --fg-dim: #8e8a83;
+  --hairline: #d8d4cc;
+  --accent: #0a0807;
+  --accent-glow: rgba(10,8,7,.5);
+  --ca-r: #d4002e;
+  --ca-c: #00a8cc;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: default;
+  transition: background .35s ease, color .35s ease;
+}
+button { font-family: inherit; cursor: pointer; }
+
+/* ==== Atmosphere overlays ====================================== */
+.grain {
+  position: fixed; inset: 0; pointer-events: none; z-index: 99;
+  opacity: .04; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.scanlines {
+  position: fixed; inset: 0; pointer-events: none; z-index: 98;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,.012) 2px 3px);
+}
+[data-theme="light"] .scanlines { background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.012) 2px 3px); }
+
+/* ==== App shell — container query host ========================= */
+.app {
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  z-index: 1;
+
+  /* CRÍTICO: el .app es el contenedor de query.
+     Todos los cqi/cqw se miden respecto a .app, no al viewport.
+     Esto hace que preview mode (donde .app está limitado a 9:16)
+     escale los tipos correctamente. */
+  container-type: size;
+  container-name: kiosk;
+}
+
+/* Tokens responsivos basados en el contenedor */
+@container kiosk (min-width: 0) {
+  .app { --pad: clamp(16px, 3cqi, 40px); }
+}
+
+/* ==== Top chrome — minimal ==================================== */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: clamp(10px, 1.6cqi, 18px) clamp(16px, 3cqi, 40px);
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: clamp(10px, 1.4cqi, 13px);
+  letter-spacing: .15em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.logo {
+  height: clamp(24px, 3.2cqi, 36px);
+  width: auto;
+  filter: brightness(1.1) contrast(1.05);
+  display: block;
+}
+[data-theme="light"] .logo { filter: invert(1) brightness(.85); }
+.topbar-right { display: flex; align-items: center; gap: clamp(10px, 1.6cqi, 20px); }
+.clock { font-variant-numeric: tabular-nums; }
+.theme-toggle {
+  background: transparent; border: 1px solid var(--hairline);
+  color: var(--fg-dim);
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  transition: all .25s;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { color: var(--fg); border-color: var(--fg-dim); }
+.theme-toggle svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+/* ==== Main stage ============================================== */
+main {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  min-height: 0;
+}
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: clamp(16px, 3cqi, 40px);
+  opacity: 0; pointer-events: none;
+  transition: opacity .4s var(--ease);
+  min-height: 0;
+}
+.screen.is-active { opacity: 1; pointer-events: auto; }
+.screen.is-active .rise { animation: rise .55s var(--ease) forwards; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ==== Question header ========================================= */
+.q-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-bottom: clamp(12px, 2cqi, 28px);
+  gap: 16px;
+  flex-shrink: 0;
+}
+.q-text {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(20px, 3.2cqi, 38px);
+  text-transform: uppercase;
+  letter-spacing: -.005em;
+  line-height: 1;
+  min-width: 0;
+}
+.q-progress {
+  display: flex; gap: 6px; align-items: center;
+  flex-shrink: 0;
+}
+.q-progress .dot {
+  width: clamp(20px, 2.4cqi, 32px);
+  height: 2px;
+  background: var(--hairline);
+  transition: background .3s;
+}
+.q-progress .dot.is-done { background: var(--fg); }
+
+/* ==== TILES ==================================================== */
+.tiles {
+  flex: 1;
+  display: grid;
+  gap: clamp(8px, 1.4cqi, 16px);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Default (LANDSCAPE / wide containers): horizontal-friendly layouts */
+.tiles.cols-2 { grid-template-columns: repeat(2, 1fr); grid-template-rows: 1fr; }
+.tiles.cols-3-2 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+.tiles.cols-4-1 { grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr; }
+
+/* PORTRAIT containers: re-flow para 2×N */
+@container kiosk (max-aspect-ratio: 0.85) {
+  .tiles.cols-3-2 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); }
+  .tiles.cols-4-1 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+  .tiles.cols-2 { grid-template-columns: repeat(2, 1fr); grid-template-rows: 1fr; }
+}
+
+/* The tile */
+.tile {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--fg);
+  font-family: var(--display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -.01em;
+  padding: clamp(16px, 2.6cqi, 36px);
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  transition: background .25s var(--ease), border-color .25s var(--ease), transform .15s ease;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(20px, 3.4cqi, 44px);
+  line-height: .95;
+}
+.tile > span:first-child {
+  min-width: 0;
+  word-break: break-word;
+  hyphens: auto;
+}
+.tile:hover { background: var(--bg-elev); border-color: var(--fg-dim); }
+.tile:active { transform: scale(.98); }
+.tile.is-selected { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.tile.is-tapped { animation: tapFlash .25s var(--ease); }
+@keyframes tapFlash { 0% { transform: scale(.98); } 100% { transform: scale(1); } }
+.tile-arrow {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: clamp(16px, 2.2cqi, 28px);
+  opacity: .4;
+  flex-shrink: 0;
+  transition: opacity .2s;
+}
+.tile:hover .tile-arrow,
+.tile.is-selected .tile-arrow { opacity: 1; }
+
+/* PORTRAIT: tiles MÁS grandes en font porque hay más espacio relativo */
+@container kiosk (max-aspect-ratio: 0.85) {
+  .tile { font-size: clamp(24px, 5.2cqi, 56px); padding: clamp(20px, 4cqi, 40px); }
+  .tile-arrow { font-size: clamp(18px, 3cqi, 32px); }
+}
+
+/* ==== HOME — dos tiles gigantes =============================== */
+.home-tiles {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+  gap: clamp(8px, 1.4cqi, 16px);
+  min-height: 0;
+  min-width: 0;
+}
+@container kiosk (max-aspect-ratio: 0.85) {
+  .home-tiles { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+}
+
+.home-tile {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--fg);
+  font-family: var(--display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -.015em;
+  padding: clamp(20px, 3.6cqi, 56px);
+  display: flex; flex-direction: column; justify-content: space-between;
+  text-align: left;
+  font-size: clamp(36px, 7cqi, 96px);
+  line-height: .9;
+  transition: background .3s var(--ease), border-color .3s, color .3s, transform .15s ease;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+}
+.home-tile:hover { background: var(--bg-elev); border-color: var(--fg-dim); }
+.home-tile:active { transform: scale(.99); }
+.home-tile.is-tapped { animation: tapFlash .25s var(--ease); }
+.home-tile.is-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.home-tile.is-primary:hover { background: var(--fg); }
+.home-tile-foot {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.6cqi, 16px);
+  letter-spacing: .2em;
+  font-weight: 400;
+  text-transform: uppercase;
+  opacity: .55;
+}
+.home-tile.is-primary .home-tile-foot { opacity: .65; }
+.home-tile-arrow {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: clamp(24px, 3.4cqi, 48px);
+  opacity: .55;
+}
+.home-tile.is-primary .home-tile-arrow { opacity: 1; }
+
+/* PORTRAIT: home-tile font más grande */
+@container kiosk (max-aspect-ratio: 0.85) {
+  .home-tile { font-size: clamp(48px, 10cqi, 120px); padding: clamp(24px, 5cqi, 64px); }
+  .home-tile-foot { font-size: clamp(11px, 2cqi, 16px); }
+}
+
+/* ==== Q-foot (back button) ==================================== */
+.q-foot {
+  padding-top: clamp(12px, 2cqi, 24px);
+  display: flex; justify-content: flex-start;
+  flex-shrink: 0;
+}
+.back-btn {
+  background: transparent; border: none;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.6cqi, 14px);
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  padding: 14px 0;
+  display: inline-flex; align-items: center; gap: 12px;
+  transition: color .25s;
+  min-height: 44px;
+}
+.back-btn:hover { color: var(--fg); }
+
+/* ==== RESULT screen =========================================== */
+.result {
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: clamp(10px, 1.6cqi, 20px);
+  min-height: 0;
+}
+.result-eyebrow {
+  font-family: var(--mono);
+  font-size: clamp(10px, 1.4cqi, 14px);
+  letter-spacing: .35em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  margin-bottom: clamp(6px, 1cqi, 14px);
+}
+.result-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(32px, 6cqi, 88px);
+  line-height: .9;
+  letter-spacing: -.025em;
+  text-transform: uppercase;
+}
+.combo {
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  overflow-y: auto;
+  min-height: 0;
+}
+.combo-item {
+  display: grid;
+  grid-template-columns: clamp(30px, 4cqi, 56px) 1fr auto;
+  gap: clamp(10px, 1.6cqi, 20px);
+  padding: clamp(10px, 1.6cqi, 20px) 0;
+  border-bottom: 1px solid var(--hairline);
+  align-items: center;
+}
+.combo-item:last-child { border-bottom: none; }
+.ci-code {
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.4cqi, 14px);
+  letter-spacing: .15em;
+  color: var(--fg-dim);
+}
+.ci-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(16px, 2.2cqi, 26px);
+  text-transform: uppercase;
+  letter-spacing: -.005em;
+  line-height: 1.05;
+}
+.ci-meta {
+  font-family: var(--mono);
+  font-size: clamp(10px, 1.2cqi, 13px);
+  color: var(--fg-dim);
+  letter-spacing: .04em;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+.ci-price {
+  font-family: var(--mono);
+  font-size: clamp(12px, 1.5cqi, 16px);
+  color: var(--fg);
+  font-weight: 500;
+}
+.combo-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.4cqi, 14px);
+  letter-spacing: .25em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.ct-amount {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(24px, 4cqi, 50px);
+  letter-spacing: -.02em;
+  color: var(--fg);
+}
+.confirm-btn {
+  position: relative;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(18px, 3cqi, 36px);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: clamp(20px, 3cqi, 40px) clamp(20px, 2.6cqi, 36px);
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%;
+  min-height: clamp(64px, 10cqi, 120px);
+  transition: background .25s, transform .15s ease;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.confirm-btn:hover { background: var(--fg); }
+.confirm-btn:active { transform: scale(.99); }
+.confirm-btn .arrow {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: clamp(20px, 2.6cqi, 36px);
+}
+.result-foot {
+  display: flex; justify-content: center;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* ==== ORDER CODE ============================================== */
+.order {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  gap: clamp(16px, 3cqi, 36px);
+}
+.order-label {
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.6cqi, 16px);
+  letter-spacing: .55em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+}
+.order-code {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(120px, 28cqi, 360px);
+  line-height: .9;
+  letter-spacing: -.05em;
+  position: relative;
+  display: inline-block;
+  text-shadow: 0 0 48px var(--accent-glow);
+  padding: 0 .1em;
+}
+.order-code::before, .order-code::after {
+  content: attr(data-text);
+  position: absolute; inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+[data-theme="light"] .order-code::before, [data-theme="light"] .order-code::after { mix-blend-mode: multiply; }
+.order-code::before { color: var(--ca-r); animation: ca-r 2.4s ease-in-out infinite; }
+.order-code::after  { color: var(--ca-c); animation: ca-c 2.4s ease-in-out infinite; }
+@keyframes ca-r {
+  0%, 80%, 100% { opacity: .55; transform: translate(-3px, 0); }
+  85% { opacity: .9; transform: translate(-12px, 4px); }
+  88% { opacity: .55; transform: translate(-3px, 0); }
+}
+@keyframes ca-c {
+  0%, 80%, 100% { opacity: .45; transform: translate(3px, 0); }
+  85% { opacity: .8; transform: translate(12px, -4px); }
+  88% { opacity: .45; transform: translate(3px, 0); }
+}
+.order-instr {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(20px, 3cqi, 40px);
+  text-transform: uppercase;
+  letter-spacing: -.005em;
+  max-width: 22ch;
+  line-height: 1.05;
+}
+.order-meta {
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.4cqi, 14px);
+  letter-spacing: .25em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  margin-top: clamp(8px, 1.4cqi, 16px);
+}
+
+/* ==== MENU placeholder ======================================== */
+.menu-placeholder {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: clamp(20px, 2.5cqi, 32px);
+  text-align: center;
+}
+.menu-placeholder h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(40px, 6cqi, 80px);
+  letter-spacing: -.025em;
+  text-transform: uppercase;
+}
+.menu-placeholder p {
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.6cqi, 14px);
+  letter-spacing: .25em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  max-width: 30ch;
+  line-height: 1.6;
+}
+
+/* ==== Idle warning ============================================ */
+.idle-warning {
+  position: fixed; inset: 0; z-index: 200;
+  display: none;
+  background: rgba(10,8,7,.92);
+  backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 24px;
+  text-align: center; padding: 40px;
+}
+[data-theme="light"] .idle-warning { background: rgba(250,249,245,.92); }
+.idle-warning.show { display: flex; }
+.idle-warning h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(36px, 5vw, 64px);
+  text-transform: uppercase;
+  letter-spacing: -.02em;
+}
+.idle-warning p {
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.1vw, 13px);
+  letter-spacing: .25em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+}
+.idle-warning button {
+  background: var(--accent); color: var(--bg);
+  border: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(14px, 1.4vw, 18px);
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  padding: 20px 40px;
+  min-height: 60px;
+  margin-top: 12px;
+}
+
+/* ==================================================================
+   PREVIEW MODE
+   ================================================================== */
+body[data-preview] {
+  background: #000 !important;
+  display: grid; place-items: center;
+  overflow: hidden;
+}
+body[data-preview] .grain,
+body[data-preview] .scanlines { display: none; }
+body[data-preview] .app {
+  position: relative !important;
+  inset: auto !important;
+  border: 1px solid #333;
+  box-shadow: 0 0 80px rgba(0,0,0,.6);
+  overflow: hidden;
+}
+body[data-preview="9-16"] .app  { aspect-ratio: 9 / 16;   height: 92vh;  width: auto; max-width: 92vw; }
+body[data-preview="16-9"] .app  { aspect-ratio: 16 / 9;   width: 92vw;   height: auto; max-height: 92vh; }
+body[data-preview="9-19"] .app  { aspect-ratio: 9 / 19.5; height: 92vh;  width: auto; max-width: 92vw; }
+body[data-preview="3-4"]  .app  { aspect-ratio: 3 / 4;    height: 92vh;  width: auto; max-width: 92vw; }
+body[data-preview] .preview-tag {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .25em;
+  color: #888; text-transform: uppercase; z-index: 1000;
+  background: rgba(0,0,0,.85); padding: 6px 14px; border: 1px solid #222;
+}
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+<div class="scanlines"></div>
+
+<div class="app">
+
+  <header class="topbar">
+    <img class="logo" id="logo" src="https://acdn-us.mitiendanube.com/stores/003/104/793/themes/common/logo-1702573383-1683748864-96f5d266512f581b76e3211392a287351683748864-640-0.png" alt="SHOCK">
+    <div class="topbar-right">
+      <span class="clock" id="clock">--:--</span>
+      <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">
+        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c-4.97 0-9-4.03-9-9z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="stage">
+
+    <!-- HOME -->
+    <section class="screen is-active" data-screen="home">
+      <div class="home-tiles rise">
+        <button class="home-tile" data-action="menu">
+          <span class="home-tile-foot"><span>01 / Tradicional</span></span>
+          <span>Ver menú</span>
+          <span class="home-tile-foot"><span>Carta completa</span><span class="home-tile-arrow">→</span></span>
+        </button>
+        <button class="home-tile is-primary" data-action="ai">
+          <span class="home-tile-foot"><span>02 / Recomendado</span></span>
+          <span>Recomendame</span>
+          <span class="home-tile-foot"><span>4 preguntas · 30 segundos</span><span class="home-tile-arrow">→</span></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Q1 · ACTIVIDAD (6) -->
+    <section class="screen" data-screen="actividad">
+      <div class="q-head rise">
+        <h2 class="q-text">¿Qué vas a hacer?</h2>
+        <div class="q-progress">
+          <span class="dot is-done"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+      <div class="tiles cols-3-2 rise" data-options="actividad">
+        <button class="tile" data-value="entrenar"><span>Entrenar</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="estudiar"><span>Estudiar</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="trabajar"><span>Trabajar</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="recuperar"><span>Recuperar</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="conducir"><span>Conducir</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="disfrutar"><span>Disfrutar</span><span class="tile-arrow">→</span></button>
+      </div>
+      <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
+    </section>
+
+    <!-- Q2 · TIEMPO (4) -->
+    <section class="screen" data-screen="tiempo">
+      <div class="q-head rise">
+        <h2 class="q-text">¿Por cuánto tiempo?</h2>
+        <div class="q-progress">
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+      <div class="tiles cols-4-1 rise" data-options="tiempo">
+        <button class="tile" data-value="30"><span>30 min</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="60"><span>1 hora</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="120"><span>2 horas</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="180"><span>3+ horas</span><span class="tile-arrow">→</span></button>
+      </div>
+      <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
+    </section>
+
+    <!-- Q3 · PESO (4 — antes 5) -->
+    <section class="screen" data-screen="peso">
+      <div class="q-head rise">
+        <h2 class="q-text">¿Cuánto pesás?</h2>
+        <div class="q-progress">
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span>
+        </div>
+      </div>
+      <div class="tiles cols-4-1 rise" data-options="peso">
+        <button class="tile" data-value="55"><span>&lt; 60 kg</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="68"><span>60 — 75</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="83"><span>75 — 90</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="100"><span>90+ kg</span><span class="tile-arrow">→</span></button>
+      </div>
+      <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
+    </section>
+
+    <!-- Q4 · TOLERANCIA (4 — antes 3) -->
+    <section class="screen" data-screen="tolerancia">
+      <div class="q-head rise">
+        <h2 class="q-text">¿Cuánto café tomás por día?</h2>
+        <div class="q-progress">
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span>
+        </div>
+      </div>
+      <div class="tiles cols-4-1 rise" data-options="tolerancia">
+        <button class="tile" data-value="0"><span>Nunca</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="1"><span>1 / día</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="2"><span>2 / día</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="3+"><span>3+ / día</span><span class="tile-arrow">→</span></button>
+      </div>
+      <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
+    </section>
+
+    <!-- RESULT -->
+    <section class="screen" data-screen="result">
+      <div class="result rise">
+        <div>
+          <div class="result-eyebrow">Tu combo</div>
+          <h2 class="result-title" id="resultTitle">Modo Físico</h2>
+        </div>
+        <div class="combo" id="comboItems"></div>
+        <div class="combo-total"><span>Total</span><span class="ct-amount" id="comboTotal">$ —</span></div>
+        <button class="confirm-btn" data-confirm>
+          <span>Confirmar pedido</span>
+          <span class="arrow">→</span>
+        </button>
+      </div>
+      <div class="result-foot"><button class="back-btn" data-restart>↺ Empezar de nuevo</button></div>
+    </section>
+
+    <!-- ORDER -->
+    <section class="screen" data-screen="order">
+      <div class="order rise">
+        <span class="order-label">Pedido confirmado</span>
+        <span class="order-code" id="orderCode" data-text="A47">A47</span>
+        <h2 class="order-instr">Decí este código en mostrador</h2>
+        <span class="order-meta">Vuelve solo en <span id="orderCountdown">10</span>s</span>
+      </div>
+    </section>
+
+    <!-- MENU placeholder -->
+    <section class="screen" data-screen="menu">
+      <div class="menu-placeholder rise">
+        <h2>Menú completo</h2>
+        <p>Placeholder · Carta tradicional acá</p>
+        <button class="back-btn" data-restart>← Volver</button>
+      </div>
+    </section>
+
+  </main>
+
+</div>
+
+<div class="idle-warning" id="idleWarning">
+  <h2>¿Seguís ahí?</h2>
+  <p>Volvemos al inicio en <span id="idleCount">10</span>s</p>
+  <button id="idleStay">Seguir</button>
+</div>
+
+<script>
+const PRODUCTS = {
+  C1: { code:'C1', name:'Shock Coffee',          meta:'300mg cafeína · double shot',    price:null, mg:300 },
+  C2: { code:'C2', name:'Shock Pre-Entreno',     meta:'+ Creatina · electrolitos',      price:null, mg:300 },
+  C3: { code:'C3', name:'Shock Productividad',   meta:'+ Tirosina · Alpha GPC',         price:null, mg:300 },
+  B1: { code:'B1', name:'+ Concentración',       meta:'Rhodiola · MCT · Carnitina',     price:null },
+  B2: { code:'B2', name:'+ Energía',             meta:'Taurina · Betaina · Citrulina',  price:null },
+  B3: { code:'B3', name:'+ Recuperación',        meta:'Colágeno · Magnesio · Vit. C',   price:null },
+  F1: { code:'F1', name:'Mix de Nueces',         meta:'Almendras · cacao 80%',          price:null },
+  F2: { code:'F2', name:'Barra Proteína',        meta:'12g proteína + colágeno',        price:null },
+  F3: { code:'F3', name:'Jerky',                 meta:'Carne deshidratada',             price:null },
+  F4: { code:'F4', name:'Trufas',                meta:'Chocolate 80%',                  price:null },
+};
+
+function recommend({ actividad, tiempo, peso, tolerancia }) {
+  const t = parseInt(tiempo, 10);
+  const p = parseInt(peso, 10);
+  let cafe, booster, comida, title, climax;
+
+  switch (actividad) {
+    case 'entrenar':
+      cafe='C2'; booster='B2'; comida=(t>=90)?'F2':'F3';
+      title='Modo'; climax='Físico'; break;
+    case 'estudiar':
+    case 'trabajar':
+      cafe='C3'; booster='B1'; comida=(t>=120)?'F1':'F4';
+      title='Foco'; climax='Máximo'; break;
+    case 'recuperar':
+      cafe='C1'; booster='B3'; comida='F2';
+      title='Modo'; climax='Recuperar'; break;
+    case 'conducir':
+      cafe='C3'; booster='B1'; comida='F3';
+      title='Modo'; climax='Alerta'; break;
+    case 'disfrutar':
+    default:
+      cafe='C1'; booster=(t>=60)?'B2':null; comida='F4';
+      title='Modo'; climax='Disfrute';
+  }
+
+  const items = [cafe, booster, comida].filter(Boolean).map(c => PRODUCTS[c]);
+  const mg = (PRODUCTS[cafe].mg || 0);
+  return { items, title, climax, mg };
+}
+
+const STATE = { actividad:null, tiempo:null, peso:null, tolerancia:null, history:['home'] };
+const stage = document.getElementById('stage');
+const screens = stage.querySelectorAll('.screen');
+
+function go(name, push=true) {
+  screens.forEach(s => {
+    const active = s.dataset.screen === name;
+    s.classList.toggle('is-active', active);
+    if (active) {
+      s.querySelectorAll('.rise').forEach(el => {
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = '';
+      });
+    }
+  });
+  if (push) STATE.history.push(name);
+  resetIdle();
+}
+function back() {
+  if (STATE.history.length <= 1) return;
+  STATE.history.pop();
+  go(STATE.history[STATE.history.length - 1], false);
+}
+function reset() {
+  STATE.actividad = STATE.tiempo = STATE.peso = STATE.tolerancia = null;
+  STATE.history = ['home'];
+  document.querySelectorAll('.tile').forEach(t => t.classList.remove('is-selected', 'is-tapped'));
+  go('home', false);
+}
+
+document.querySelectorAll('[data-action]').forEach(b => {
+  b.addEventListener('click', () => {
+    b.classList.add('is-tapped');
+    setTimeout(() => {
+      const a = b.dataset.action;
+      go(a === 'menu' ? 'menu' : 'actividad');
+    }, 180);
+  });
+});
+
+const order = ['actividad','tiempo','peso','tolerancia','result'];
+document.querySelectorAll('[data-options]').forEach(group => {
+  const key = group.dataset.options;
+  group.querySelectorAll('.tile').forEach(opt => {
+    opt.addEventListener('click', () => {
+      group.querySelectorAll('.tile').forEach(t => t.classList.remove('is-selected'));
+      opt.classList.add('is-selected');
+      STATE[key] = opt.dataset.value;
+      const cur = group.closest('.screen').dataset.screen;
+      const nxt = order[order.indexOf(cur) + 1];
+      setTimeout(() => {
+        if (nxt === 'result') buildResult();
+        go(nxt);
+      }, 220);
+    });
+  });
+});
+
+document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', back));
+document.querySelectorAll('[data-restart]').forEach(b => b.addEventListener('click', reset));
+document.querySelectorAll('[data-confirm]').forEach(b => {
+  b.addEventListener('click', () => { go('order'); startOrderCountdown(); });
+});
+
+function genCode() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return letters[Math.floor(Math.random()*letters.length)] + (Math.floor(Math.random()*90)+10);
+}
+let LAST_CODE = null;
+function buildResult() {
+  const r = recommend(STATE);
+  document.getElementById('resultTitle').textContent = `${r.title} ${r.climax}`;
+  LAST_CODE = genCode();
+  const oc = document.getElementById('orderCode');
+  oc.textContent = LAST_CODE;
+  oc.setAttribute('data-text', LAST_CODE);
+
+  const wrap = document.getElementById('comboItems');
+  wrap.innerHTML = '';
+  let total = 0; let allPriced = true;
+  r.items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'combo-item';
+    row.innerHTML = `
+      <span class="ci-code">${it.code}</span>
+      <div>
+        <div class="ci-name">${it.name}</div>
+        <div class="ci-meta">${it.meta}</div>
+      </div>
+      <span class="ci-price">${it.price != null ? '$ '+it.price.toLocaleString('es-AR') : '$ —'}</span>
+    `;
+    wrap.appendChild(row);
+    if (it.price != null) total += it.price; else allPriced = false;
+  });
+  document.getElementById('comboTotal').textContent = allPriced ? '$ '+total.toLocaleString('es-AR') : '$ —';
+}
+
+let orderTimer = null;
+function startOrderCountdown() {
+  let s = 10;
+  document.getElementById('orderCountdown').textContent = s;
+  clearInterval(orderTimer);
+  orderTimer = setInterval(() => {
+    s--;
+    document.getElementById('orderCountdown').textContent = s;
+    if (s <= 0) { clearInterval(orderTimer); reset(); }
+  }, 1000);
+}
+
+let idleWarnTimer = null, idleTickTimer = null;
+const IDLE_WARN_MS = 50_000;
+const idleWarning = document.getElementById('idleWarning');
+function resetIdle() {
+  clearTimeout(idleWarnTimer);
+  clearInterval(idleTickTimer);
+  idleWarning.classList.remove('show');
+  const cur = STATE.history[STATE.history.length - 1];
+  if (cur === 'home' || cur === 'order') return;
+  idleWarnTimer = setTimeout(() => {
+    idleWarning.classList.add('show');
+    let s = 10;
+    document.getElementById('idleCount').textContent = s;
+    idleTickTimer = setInterval(() => {
+      s--;
+      document.getElementById('idleCount').textContent = s;
+      if (s <= 0) { clearInterval(idleTickTimer); idleWarning.classList.remove('show'); reset(); }
+    }, 1000);
+  }, IDLE_WARN_MS);
+}
+document.getElementById('idleStay').addEventListener('click', resetIdle);
+['click','touchstart','keydown'].forEach(e => document.addEventListener(e, resetIdle, {passive:true}));
+
+const root = document.documentElement;
+const saved = localStorage.getItem('shock-theme');
+if (saved) root.setAttribute('data-theme', saved);
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const cur = root.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  localStorage.setItem('shock-theme', next);
+});
+
+function tick() {
+  const d = new Date();
+  const pad = n => n.toString().padStart(2,'0');
+  document.getElementById('clock').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+tick(); setInterval(tick, 30_000);
+
+/* PREVIEW MODE */
+const PREVIEW_LABELS = {
+  '9-16': '9 : 16  ·  KIOSK VERTICAL',
+  '16-9': '16 : 9  ·  KIOSK HORIZONTAL',
+  '9-19': '9 : 19.5  ·  MÓVIL',
+  '3-4':  '3 : 4  ·  TABLET RETRATO',
+};
+function setPreview(mode) {
+  document.querySelectorAll('.preview-tag').forEach(n => n.remove());
+  if (!mode) { document.body.removeAttribute('data-preview'); return; }
+  document.body.setAttribute('data-preview', mode);
+  const tag = document.createElement('div');
+  tag.className = 'preview-tag';
+  tag.textContent = PREVIEW_LABELS[mode] + '  ·  R = reset';
+  document.body.appendChild(tag);
+}
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === 'Escape') back();
+  if (e.key === 'v' || e.key === 'V') setPreview('9-16');
+  if (e.key === 'h' || e.key === 'H') setPreview('16-9');
+  if (e.key === 'm' || e.key === 'M') setPreview('9-19');
+  if (e.key === 't' || e.key === 'T') setPreview('3-4');
+  if (e.key === 'r' || e.key === 'R') setPreview(null);
+});
+
+resetIdle();
+</script>
+</body>
+</html>
+<!-- SHOCK Kiosk · v4 -->
