@@ -208,10 +208,13 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
    Fórmula: 120cqi / chars → la palabra más larga llena ~85% del ancho del tile.
    Cap superior 44px para que en kiosks gigantes no sea ridículo. */
 .tile-label {
-  font-size: min(44px, calc(120cqi / var(--chars, 8)));
+  /* Initial conservative size — JS fitText() upscales after fonts load */
+  font-size: 18px;
   white-space: nowrap;
   overflow: hidden;
   flex: 1; min-width: 0;
+  display: block;
+  line-height: 1;
 }
 .tile-arrow {
   font-family: var(--mono);
@@ -260,10 +263,12 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
 .home-tile.is-primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 .home-tile.is-primary:hover { background: var(--fg); }
 .home-tile-label {
-  font-size: min(80px, calc(150cqi / var(--chars, 8)));
+  /* Initial conservative size — JS fitText() upscales after fonts load */
+  font-size: 32px;
   white-space: nowrap;
   overflow: hidden;
   display: block;
+  line-height: 1;
 }
 .home-tile-foot {
   display: flex; justify-content: space-between; align-items: flex-end;
@@ -361,13 +366,13 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
 .ci-name {
   font-family: var(--display);
   font-weight: 700;
-  font-size: clamp(22px, 3.4cqi, 44px);
+  font-size: 22px;  /* JS fitText() upscales */
   text-transform: uppercase;
   letter-spacing: -.005em;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: block;
 }
 .ci-meta {
   font-family: var(--mono);
@@ -996,6 +1001,113 @@ document.addEventListener('keydown', e => {
   if (e.key === 't' || e.key === 'T') setPreview('3-4');
   if (e.key === 'r' || e.key === 'R') setPreview(null);
 });
+
+/* =================================================================
+   FIT TEXT · mide el ancho real del label y baja el font hasta entrar.
+   Indiferente a qué tipografía cargue (Quantico real o fallback).
+   ================================================================= */
+function fitText(label, opts = {}) {
+  const max = opts.max || 64;
+  const min = opts.min || 12;
+  const reservedRight = opts.reservedRight || 0; // px ocupados por arrow + gap
+
+  const parent = label.parentElement;
+  if (!parent || !label.offsetParent) return; // not visible, skip
+
+  const parentStyle = getComputedStyle(parent);
+  const padX = parseFloat(parentStyle.paddingLeft) + parseFloat(parentStyle.paddingRight);
+  const available = parent.clientWidth - padX - reservedRight - 4; // 4px safety margin
+
+  if (available <= 0) return;
+
+  // Binary search the largest size that fits
+  let lo = min, hi = max, best = min;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    label.style.fontSize = mid + 'px';
+    if (label.scrollWidth <= available) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  label.style.fontSize = best + 'px';
+}
+
+function fitAllText() {
+  // Tiles (con arrow al lado): reservar ~50px para arrow + gap
+  document.querySelectorAll('.tile').forEach(tile => {
+    const label = tile.querySelector('.tile-label');
+    const arrow = tile.querySelector('.tile-arrow');
+    if (!label) return;
+    const arrowWidth = arrow ? arrow.offsetWidth : 0;
+    const tileStyle = getComputedStyle(tile);
+    const gap = parseFloat(tileStyle.gap) || 12;
+    fitText(label, { max: 56, min: 14, reservedRight: arrowWidth + gap });
+  });
+
+  // Home tiles (label ocupa todo el ancho, sin arrow al lado)
+  document.querySelectorAll('.home-tile').forEach(tile => {
+    const label = tile.querySelector('.home-tile-label');
+    if (!label) return;
+    fitText(label, { max: 96, min: 24 });
+  });
+
+  // Result combo item names (con price al lado)
+  document.querySelectorAll('.combo-item').forEach(row => {
+    const name = row.querySelector('.ci-name');
+    const price = row.querySelector('.ci-price');
+    const code = row.querySelector('.ci-code');
+    if (!name) return;
+    const reserve = (price ? price.offsetWidth : 0)
+                  + (code ? code.offsetWidth : 0)
+                  + 80; // gaps
+    fitText(name, { max: 44, min: 14, reservedRight: reserve });
+  });
+}
+
+// Run after fonts load (Quantico can be ~30% narrower than Arial fallback)
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    fitAllText();
+    // run again after a beat in case layout shifted
+    setTimeout(fitAllText, 100);
+  });
+} else {
+  window.addEventListener('load', fitAllText);
+}
+
+// Re-fit on resize/orientation
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(fitAllText, 100);
+});
+
+// Re-fit when a screen becomes active (preview mode toggle, navigation)
+const screenObserver = new MutationObserver(() => requestAnimationFrame(fitAllText));
+document.querySelectorAll('.screen').forEach(s => {
+  screenObserver.observe(s, { attributes: true, attributeFilter: ['class'] });
+});
+
+// Re-fit when result is rebuilt (combo items inserted dynamically)
+const _origBuildResult = buildResult;
+buildResult = function() {
+  _origBuildResult();
+  requestAnimationFrame(fitAllText);
+};
+
+// Re-fit when preview mode changes
+const _origSetPreview = setPreview;
+setPreview = function(mode) {
+  _origSetPreview(mode);
+  setTimeout(fitAllText, 50);
+};
+
+// First run (in case fonts.ready already fired or doesn't exist)
+setTimeout(fitAllText, 50);
+setTimeout(fitAllText, 600); // safety re-run for late font load
 
 resetIdle();
 </script>
