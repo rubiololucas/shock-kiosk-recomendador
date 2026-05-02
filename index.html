@@ -1003,29 +1003,34 @@ document.addEventListener('keydown', e => {
 });
 
 /* =================================================================
-   FIT TEXT · mide el ancho real del label y baja el font hasta entrar.
-   Indiferente a qué tipografía cargue (Quantico real o fallback).
+   FIT TEXT · mide el ancho REAL del texto rendereado usando Range API
+   (no scrollWidth — ese mide el bloque, no el texto).
    ================================================================= */
+function getTextWidth(el) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  return range.getBoundingClientRect().width;
+}
+
 function fitText(label, opts = {}) {
   const max = opts.max || 64;
   const min = opts.min || 12;
-  const reservedRight = opts.reservedRight || 0; // px ocupados por arrow + gap
+  const reservedRight = opts.reservedRight || 0;
 
   const parent = label.parentElement;
-  if (!parent || !label.offsetParent) return; // not visible, skip
+  if (!parent || !label.offsetParent) return;
 
   const parentStyle = getComputedStyle(parent);
   const padX = parseFloat(parentStyle.paddingLeft) + parseFloat(parentStyle.paddingRight);
-  const available = parent.clientWidth - padX - reservedRight - 4; // 4px safety margin
+  const available = parent.clientWidth - padX - reservedRight - 4;
 
   if (available <= 0) return;
 
-  // Binary search the largest size that fits
   let lo = min, hi = max, best = min;
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
     label.style.fontSize = mid + 'px';
-    if (label.scrollWidth <= available) {
+    if (getTextWidth(label) <= available) {
       best = mid;
       lo = mid + 1;
     } else {
@@ -1036,7 +1041,7 @@ function fitText(label, opts = {}) {
 }
 
 function fitAllText() {
-  // Tiles (con arrow al lado): reservar ~50px para arrow + gap
+  // Tiles · min bajo (10px) por si en preview ratio chico no entra "Turno Nocturno"
   document.querySelectorAll('.tile').forEach(tile => {
     const label = tile.querySelector('.tile-label');
     const arrow = tile.querySelector('.tile-arrow');
@@ -1044,17 +1049,17 @@ function fitAllText() {
     const arrowWidth = arrow ? arrow.offsetWidth : 0;
     const tileStyle = getComputedStyle(tile);
     const gap = parseFloat(tileStyle.gap) || 12;
-    fitText(label, { max: 56, min: 14, reservedRight: arrowWidth + gap });
+    fitText(label, { max: 56, min: 10, reservedRight: arrowWidth + gap });
   });
 
-  // Home tiles (label ocupa todo el ancho, sin arrow al lado)
+  // Home tiles
   document.querySelectorAll('.home-tile').forEach(tile => {
     const label = tile.querySelector('.home-tile-label');
     if (!label) return;
-    fitText(label, { max: 96, min: 24 });
+    fitText(label, { max: 96, min: 20 });
   });
 
-  // Result combo item names (con price al lado)
+  // Result combo item names
   document.querySelectorAll('.combo-item').forEach(row => {
     const name = row.querySelector('.ci-name');
     const price = row.querySelector('.ci-price');
@@ -1062,8 +1067,8 @@ function fitAllText() {
     if (!name) return;
     const reserve = (price ? price.offsetWidth : 0)
                   + (code ? code.offsetWidth : 0)
-                  + 80; // gaps
-    fitText(name, { max: 44, min: 14, reservedRight: reserve });
+                  + 80;
+    fitText(name, { max: 44, min: 12, reservedRight: reserve });
   });
 }
 
