@@ -163,10 +163,12 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
 }
 .tiles.cols-4-2 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); }
 .tiles.cols-4-1 { grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr; }
+.tiles.cols-2-1 { grid-template-columns: repeat(2, 1fr); grid-template-rows: 1fr; }
 
 @container kiosk (max-aspect-ratio: 0.85) {
   .tiles.cols-4-2 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); }
   .tiles.cols-4-1 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+  .tiles.cols-2-1 { grid-template-columns: 1fr; grid-template-rows: repeat(2, 1fr); }
 }
 
 /* ==== TILE ==================================================== */
@@ -365,25 +367,27 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
 .ci-name {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 22px;  /* JS fitText() reescala */
+  /* Responsive: grande y dominante en el kiosco, legible en celular.
+     Baja de línea si es largo (ej. "Concentración c/ leche") en vez de recortarse. */
+  font-size: clamp(16px, 3.1cqi, 38px);
   text-transform: uppercase;
   letter-spacing: -.005em;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
+  line-height: 1.1;
+  white-space: normal;
+  overflow-wrap: break-word;
   display: block;
   color: var(--fg);
 }
 .ci-meta {
   font-family: var(--mono);
-  font-size: clamp(10px, 1.2cqi, 13px);
-  color: var(--fg-dim);
-  letter-spacing: .04em;
-  margin-top: 6px;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(12.5px, 1.5cqi, 15px);
+  color: var(--fg-soft);
+  letter-spacing: .01em;
+  margin-top: clamp(8px, 1.1cqi, 12px);
+  line-height: 1.6;
+  white-space: normal;      /* deja que la descripción del booster ocupe varias líneas */
+  overflow-wrap: break-word;
+  max-width: 52ch;
 }
 .ci-price {
   font-family: var(--mono);
@@ -393,6 +397,10 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
   letter-spacing: -.01em;
   white-space: nowrap;
 }
+/* Fila de descuento del combo */
+.combo-item.is-discount .ci-name,
+.combo-item.is-discount .ci-price { color: var(--fg-dim); }
+.combo-item.is-discount .ci-code { opacity: .6; }
 
 /* total */
 .combo-total {
@@ -463,15 +471,18 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
   text-transform: uppercase;
 }
 .order-code {
-  font-family: var(--mono);
+  font-family: var(--display);
   font-weight: 700;
-  font-size: clamp(120px, 28cqi, 360px);
-  line-height: .9;
-  letter-spacing: -.05em;
+  font-size: clamp(46px, 11cqi, 150px);
+  line-height: .92;
+  letter-spacing: -.02em;
+  text-transform: uppercase;
+  text-align: center;
   position: relative;
   display: inline-block;
   color: var(--fg);
   padding: 0 .1em;
+  max-width: 14ch;
 }
 .order-code::before, .order-code::after {
   content: attr(data-text);
@@ -541,6 +552,147 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
   max-width: 30ch;
   line-height: 1.6;
 }
+
+/* ==== MENU · carta completa =================================== */
+.menu {
+  flex: 1;
+  display: flex; flex-direction: column;
+  gap: clamp(10px, 1.4cqi, 18px);
+  min-height: 0;
+}
+.menu-head { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; }
+.menu-eyebrow {
+  font-family: var(--mono);
+  font-size: clamp(10px, 1.3cqi, 13px);
+  letter-spacing: .35em;
+  color: var(--fg-soft);
+  text-transform: uppercase;
+}
+.menu-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(16px, 2.2cqi, 26px);
+  line-height: 1;
+  letter-spacing: -.005em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+.menu-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--hairline);
+  padding-top: clamp(8px, 1.4cqi, 16px);
+}
+.menu-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: clamp(28px, 4cqi, 72px);
+  row-gap: 0;
+  align-items: start;
+}
+@container kiosk (max-aspect-ratio: 0.85) {
+  .menu-cols { grid-template-columns: 1fr; }
+}
+.menu-group { margin-bottom: clamp(26px, 3.4cqi, 46px); }
+.menu-group:last-child { margin-bottom: 0; }
+/* Encabezado de sección — categoría fuerte y escaneable: índice en chip de
+   tinta + título display grande + regla gruesa. Se distingue claramente de
+   las filas de producto (que usan hairlines finas). */
+.menu-group-head {
+  display: flex; align-items: center;
+  gap: clamp(10px, 1.5cqi, 16px);
+  border-bottom: 2px solid var(--hairline-strong);
+  padding-bottom: clamp(9px, 1.3cqi, 14px);
+  margin-bottom: clamp(12px, 1.6cqi, 18px);
+}
+.mg-index {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(11px, 1.3cqi, 14px);
+  color: var(--bg);
+  background: var(--accent);
+  padding: .28em .55em;
+  letter-spacing: .08em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.mg-title {
+  font-family: var(--display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: clamp(18px, 2.5cqi, 30px);
+  color: var(--fg);
+  letter-spacing: -.01em;
+  line-height: 1;
+}
+.menu-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: clamp(14px, 2cqi, 28px);
+  padding: clamp(11px, 1.5cqi, 16px) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+.menu-group .menu-row:last-child { border-bottom: none; }
+.mr-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(16px, 2cqi, 23px);
+  text-transform: uppercase;
+  letter-spacing: -.005em;
+  line-height: 1.12;
+  color: var(--fg);
+  min-width: 0;
+}
+/* Descripción del ítem — legible en celular: mono más grande, más contraste,
+   más interlineado y línea corta para escanear rápido. */
+.mr-name small {
+  display: block;
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: clamp(12.5px, 1.5cqi, 15px);
+  letter-spacing: .01em;
+  text-transform: none;
+  color: var(--fg-soft);
+  margin-top: clamp(9px, 1.3cqi, 14px);
+  line-height: 1.6;
+  max-width: 60ch;
+}
+/* Aclaración más chica (ej. qué aminoácidos lleva) — subordinada a la descripción */
+.mr-name small.mr-sub {
+  font-size: clamp(11px, 1.3cqi, 13px);
+  color: var(--fg-dim);
+  letter-spacing: .02em;
+  margin-top: clamp(4px, .6cqi, 7px);
+  line-height: 1.5;
+}
+/* Línea de variantes de precio (con leche / con leche grande) — separada y clara */
+.mr-name small.mr-var {
+  font-size: clamp(11px, 1.3cqi, 13px);
+  color: var(--fg-dim);
+  letter-spacing: .05em;
+  margin-top: clamp(4px, .6cqi, 7px);
+  line-height: 1.4;
+}
+/* Descripción a nivel de sección (ej. la calidad del café, común a todos) */
+.menu-group-desc {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: clamp(12.5px, 1.5cqi, 15px);
+  color: var(--fg-soft);
+  line-height: 1.6;
+  letter-spacing: .01em;
+  max-width: 60ch;
+  margin-bottom: clamp(8px, 1.2cqi, 14px);
+}
+.mr-price {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: clamp(15px, 1.9cqi, 21px);
+  color: var(--fg);
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.menu-foot { flex-shrink: 0; display: flex; justify-content: flex-start; padding-top: clamp(8px,1.2cqi,16px); }
 
 /* ==== Idle warning — fondo crema con blur ===================== */
 .idle-warning {
@@ -623,7 +775,7 @@ body[data-preview] .preview-tag {
         <button class="home-tile is-primary" data-action="ai">
           <span class="home-tile-foot"><span>02 / Recomendado</span></span>
           <span class="home-tile-label">Recomendame</span>
-          <span class="home-tile-foot"><span>4 preguntas · 30 segundos</span><span class="home-tile-arrow">→</span></span>
+          <span class="home-tile-foot"><span>5 preguntas · 30 segundos</span><span class="home-tile-arrow">→</span></span>
         </button>
       </div>
     </section>
@@ -633,7 +785,7 @@ body[data-preview] .preview-tag {
       <div class="q-head rise">
         <h2 class="q-text">¿Qué vas a hacer?</h2>
         <div class="q-progress">
-          <span class="dot is-done"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="dot is-done"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
         </div>
       </div>
       <div class="tiles cols-4-2 rise" data-options="actividad">
@@ -649,12 +801,27 @@ body[data-preview] .preview-tag {
       <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
     </section>
 
-    <!-- Q2 · TIEMPO -->
+    <!-- Q2 · LECHE -->
+    <section class="screen" data-screen="leche">
+      <div class="q-head rise">
+        <h2 class="q-text">¿Cómo tomás el café?</h2>
+        <div class="q-progress">
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+      <div class="tiles cols-2-1 rise" data-options="leche">
+        <button class="tile" data-value="sin"><span class="tile-label">Sin leche</span><span class="tile-arrow">→</span></button>
+        <button class="tile" data-value="con"><span class="tile-label">Con leche</span><span class="tile-arrow">→</span></button>
+      </div>
+      <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
+    </section>
+
+    <!-- Q3 · TIEMPO -->
     <section class="screen" data-screen="tiempo">
       <div class="q-head rise">
         <h2 class="q-text">¿Por cuánto tiempo?</h2>
         <div class="q-progress">
-          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span><span class="dot"></span>
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span><span class="dot"></span>
         </div>
       </div>
       <div class="tiles cols-4-1 rise" data-options="tiempo">
@@ -666,12 +833,12 @@ body[data-preview] .preview-tag {
       <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
     </section>
 
-    <!-- Q3 · PESO -->
+    <!-- Q4 · PESO -->
     <section class="screen" data-screen="peso">
       <div class="q-head rise">
         <h2 class="q-text">¿Cuánto pesás?</h2>
         <div class="q-progress">
-          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span>
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot"></span>
         </div>
       </div>
       <div class="tiles cols-4-1 rise" data-options="peso">
@@ -683,12 +850,12 @@ body[data-preview] .preview-tag {
       <div class="q-foot"><button class="back-btn" data-back>← Atrás</button></div>
     </section>
 
-    <!-- Q4 · TOLERANCIA -->
+    <!-- Q5 · TOLERANCIA -->
     <section class="screen" data-screen="tolerancia">
       <div class="q-head rise">
         <h2 class="q-text">¿Cuánto café tomás?</h2>
         <div class="q-progress">
-          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span>
+          <span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span><span class="dot is-done"></span>
         </div>
       </div>
       <div class="tiles cols-4-1 rise" data-options="tolerancia">
@@ -723,19 +890,65 @@ body[data-preview] .preview-tag {
     <!-- ORDER -->
     <section class="screen" data-screen="order">
       <div class="order rise">
-        <span class="order-label">Pedido confirmado</span>
-        <span class="order-code" id="orderCode" data-text="A47">A47</span>
-        <h2 class="order-instr">Decí este código en mostrador</h2>
-        <span class="order-meta">Vuelve solo en <span id="orderCountdown">10</span>s</span>
+        <span class="order-label">Tu combo</span>
+        <span class="order-code" id="orderCombo" data-text="Foco Profundo">Foco Profundo</span>
+        <h2 class="order-instr">Pedilo para empezar a hacer</h2>
+        <span class="order-meta">Vuelve al inicio en <span id="orderCountdown">10</span>s</span>
       </div>
     </section>
 
-    <!-- MENU placeholder -->
+    <!-- MENU · carta completa -->
     <section class="screen" data-screen="menu">
-      <div class="menu-placeholder rise">
-        <h2>Menú completo</h2>
-        <p>Placeholder · Carta tradicional acá</p>
-        <button class="back-btn" data-restart>← Volver</button>
+      <div class="menu rise">
+        <div class="menu-head">
+          <span class="menu-eyebrow">Carta —</span>
+          <h2 class="menu-title">Menú completo</h2>
+        </div>
+        <div class="menu-scroll">
+          <div class="menu-cols">
+
+            <div class="menu-group">
+              <div class="menu-group-head"><span class="mg-index">01</span><span class="mg-title">Cafés</span></div>
+              <div class="menu-group-desc">Café con granos de especialidad, con alto contenido de cafeína natural para mejorar tu rapidez mental y resistencia física.</div>
+              <div class="menu-row"><span class="mr-name">Shock Coffee Corto</span><span class="mr-price">$3.500</span></div>
+              <div class="menu-row"><span class="mr-name">Shock Coffee</span><span class="mr-price">$3.900</span></div>
+              <div class="menu-row"><span class="mr-name">Shock con Leche<small>Podés pedirla con leche vegetal por $1.000 extra.</small></span><span class="mr-price">$4.500</span></div>
+              <div class="menu-row"><span class="mr-name">Shock con Leche Grande<small>Podés pedirla con leche vegetal por $1.000 extra.</small></span><span class="mr-price">$4.900</span></div>
+            </div>
+
+            <div class="menu-group">
+              <div class="menu-group-head"><span class="mg-index">02</span><span class="mg-title">Especiales</span></div>
+              <div class="menu-group-desc">Cada uno es un Shock Coffee con aminoácidos específicos agregados.</div>
+              <div class="menu-row"><span class="mr-name">Shock Concentración<small>Shock Coffee + aminoácidos específicos para aumentar tu memoria y concentración.</small><small class="mr-sub">Con teanina, tirosina y colina: más foco y claridad mental, sin nervios.</small><small class="mr-var">Con leche $7.000 · Con leche grande $7.400</small></span><span class="mr-price">$6.400</span></div>
+              <div class="menu-row"><span class="mr-name">Shock Pre-Entreno<small>Shock Coffee + aminoácidos específicos para aumentar tu fuerza y resistencia física.</small><small class="mr-sub">Con taurina, betaína, teacrina y electrolitos: más energía, potencia e hidratación.</small><small class="mr-var">Con leche $7.000 · Con leche grande $7.400</small></span><span class="mr-price">$6.400</span></div>
+            </div>
+
+            <div class="menu-group">
+              <div class="menu-group-head"><span class="mg-index">03</span><span class="mg-title">Boosters</span></div>
+              <div class="menu-group-desc">Sumá un booster de aminoácidos a cualquier café.</div>
+              <div class="menu-row"><span class="mr-name">Booster Concentración<small>Aminoácidos para foco y memoria.</small><small class="mr-sub">Teanina, tirosina y colina: claridad mental sin nervios.</small></span><span class="mr-price">$2.500</span></div>
+              <div class="menu-row"><span class="mr-name">Booster Pre-Entreno<small>Aminoácidos para fuerza y resistencia.</small><small class="mr-sub">Taurina, betaína, teacrina y electrolitos: energía e hidratación.</small></span><span class="mr-price">$2.500</span></div>
+            </div>
+
+            <div class="menu-group">
+              <div class="menu-group-head"><span class="mg-index">04</span><span class="mg-title">Alimentos</span></div>
+              <div class="menu-group-desc">Snacks para acompañar tu café.</div>
+              <div class="menu-row"><span class="mr-name">Barra Proteica<small>Sin azúcar, sin harinas y con 20 g de proteína.</small></span><span class="mr-price">$2.500</span></div>
+              <div class="menu-row"><span class="mr-name">Mix de Frutos Secos<small>Energía limpia para entrenar o trabajar por horas seguidas sin bajar el rendimiento.</small></span><span class="mr-price">$2.500</span></div>
+            </div>
+
+            <div class="menu-group">
+              <div class="menu-group-head"><span class="mg-index">05</span><span class="mg-title">Combos</span></div>
+              <div class="menu-group-desc">Café + alimento en un solo precio. Los especiales llevan −15%.</div>
+              <div class="menu-row"><span class="mr-name">Shock Coffee + Barra<small>Café de especialidad + barra proteica: energía y 20 g de proteína para media mañana o post-entreno.</small></span><span class="mr-price">$6.400</span></div>
+              <div class="menu-row"><span class="mr-name">Shock con Leche + Barra<small>Shock con leche + barra proteica sin azúcar: un combo completo y saciante.</small></span><span class="mr-price">$7.000</span></div>
+              <div class="menu-row"><span class="mr-name">Concentración + Mix<small>Shock Concentración + mix de frutos secos: foco mental y energía que dura horas.</small><small class="mr-var">Con leche $8.075</small></span><span class="mr-price">$7.565</span></div>
+              <div class="menu-row"><span class="mr-name">Pre-Entreno + Barra<small>Shock Pre-Entreno + barra proteica: fuerza, resistencia y recuperación muscular.</small><small class="mr-var">Con leche $8.075</small></span><span class="mr-price">$7.565</span></div>
+            </div>
+
+          </div>
+        </div>
+        <div class="menu-foot"><button class="back-btn" data-restart>← Volver</button></div>
       </div>
     </section>
 
@@ -750,57 +963,53 @@ body[data-preview] .preview-tag {
 </div>
 
 <script>
+/* ================================================================
+   CATÁLOGO · precios reales (jul 2026)
+   Especial = café standard + booster de aminoácidos ($2.500).
+   Los combos de especiales llevan -15% (se aplica en recommend()).
+   ================================================================ */
 const PRODUCTS = {
-  C1: { code:'C1', name:'Shock Coffee',          meta:'300mg cafeína · double shot',    price:3500, mg:300 },
-  C2: { code:'C2', name:'Shock Pre-Entreno',     meta:'+ Creatina · electrolitos',      price:4900, mg:300 },
-  C3: { code:'C3', name:'Shock Productividad',   meta:'+ Tirosina · Alpha GPC',         price:4900, mg:300 },
-  B1: { code:'B1', name:'+ Concentración',       meta:'Rhodiola · MCT · Carnitina',     price:1699 },
-  B2: { code:'B2', name:'+ Energía',             meta:'Taurina · Betaina · Citrulina',  price:1699 },
-  B3: { code:'B3', name:'+ Recuperación',        meta:'Colágeno · Magnesio · Vit. C',   price:1699 },
-  F1: { code:'F1', name:'Mix de Nueces',         meta:'Almendras · cacao 80%',          price:2999 },
-  F2: { code:'F2', name:'Barra Proteína',        meta:'12g proteína + colágeno',        price:2899 },
-  F3: { code:'F3', name:'Jerky',                 meta:'Carne deshidratada',             price:3499 },
-  F4: { code:'F4', name:'Trufas',                meta:'Chocolate 80% · densas',         price:1999 },
+  // Especiales usados por el recomendador (café + booster ya incluido)
+  CONC:   { code:'ESP', name:'Shock Concentración',        meta:'Shock Coffee + aminoácidos específicos para aumentar tu memoria y concentración. Con teanina, tirosina y colina: foco y claridad mental, sin nervios.', price:6400 },
+  CONC_L: { code:'ESP', name:'Shock Concentración c/ leche', meta:'Shock Coffee con leche + aminoácidos específicos para tu memoria y concentración. Con teanina, tirosina y colina.', price:7000 },
+  PRE:    { code:'ESP', name:'Shock Pre-Entreno',          meta:'Shock Coffee + aminoácidos específicos para aumentar tu fuerza y resistencia física. Con taurina, betaína, teacrina y electrolitos: energía e hidratación.', price:6400 },
+  PRE_L:  { code:'ESP', name:'Shock Pre-Entreno c/ leche', meta:'Shock Coffee con leche + aminoácidos específicos para tu fuerza y resistencia física. Con taurina, betaína, teacrina y electrolitos.', price:7000 },
+  // Comidas
+  MIX:    { code:'F',   name:'Mix de frutos secos',       meta:'Energía limpia para entrenar o trabajar por horas seguidas sin bajar el rendimiento.', price:2500 },
+  BARRA:  { code:'F',   name:'Barra proteica',            meta:'Sin azúcar, sin harinas y con 20 g de proteína.',                   price:2500 },
 };
 
-function recommend({ actividad, tiempo, peso, tolerancia }) {
-  const t = parseInt(tiempo, 10);
-  let cafe, booster, comida, title, climax;
+/* Objetivo del recomendador: subir el ticket → siempre el combo más
+   completo (café especial + comida = café + booster + comida). La
+   actividad decide Concentración vs Pre-Entreno; la leche es gusto
+   (viene de la pregunta 2, NO se usa para subir el ticket). */
+function recommend({ actividad, leche }) {
+  const conLeche = (leche === 'con');
+  let tipo, title, climax;
   switch (actividad) {
-    case 'deep-work':
-      cafe='C3'; booster='B1'; comida='F1';
-      title='Foco'; climax='Profundo'; break;
-    case 'fuerza':
-      cafe='C2'; booster='B2'; comida='F2';
-      title='Modo'; climax='Fuerza'; break;
-    case 'cardio':
-      cafe='C2'; booster='B2'; comida='F3';
-      title='Modo'; climax='Cardio'; break;
-    case 'hiit':
-      cafe='C2'; booster='B2'; comida='F2';
-      title='Modo'; climax='HIIT'; break;
-    case 'estudio':
-      cafe='C3'; booster='B1'; comida='F4';
-      title='Modo'; climax='Estudio'; break;
-    case 'turno-nocturno':
-      cafe='C1'; booster='B2'; comida='F3';
-      title='Turno'; climax='Nocturno'; break;
-    case 'conduccion':
-      cafe='C3'; booster='B1'; comida='F3';
-      title='Modo'; climax='Alerta'; break;
-    case 'sin-sueno':
-      cafe='C1'; booster='B2'; comida='F1';
-      title='Sin'; climax='Sueño'; break;
-    default:
-      cafe='C1'; booster='B2'; comida='F4';
-      title='Modo'; climax='Shock';
+    // Mentales / alerta → Concentración
+    case 'deep-work':      tipo='conc'; title='Foco';  climax='Profundo'; break;
+    case 'estudio':        tipo='conc'; title='Modo';  climax='Estudio';  break;
+    case 'conduccion':     tipo='conc'; title='Modo';  climax='Alerta';   break;
+    case 'turno-nocturno': tipo='conc'; title='Turno'; climax='Nocturno'; break;
+    case 'sin-sueno':      tipo='conc'; title='Sin';   climax='Sueño';    break;
+    // Físicas → Pre-Entreno
+    case 'fuerza':         tipo='pre';  title='Modo';  climax='Fuerza';   break;
+    case 'cardio':         tipo='pre';  title='Modo';  climax='Cardio';   break;
+    case 'hiit':           tipo='pre';  title='Modo';  climax='HIIT';     break;
+    default:               tipo='conc'; title='Modo';  climax='Shock';
   }
-  const items = [cafe, booster, comida].filter(Boolean).map(c => PRODUCTS[c]);
-  const mg = (PRODUCTS[cafe].mg || 0);
-  return { items, title, climax, mg };
+  // Café especial (con/sin leche) + comida. Concentración va con mix de
+  // frutos secos; Pre-Entreno va con barra proteica.
+  const cafe   = tipo === 'conc' ? (conLeche ? 'CONC_L' : 'CONC')
+                                 : (conLeche ? 'PRE_L'  : 'PRE');
+  const comida = tipo === 'conc' ? 'MIX' : 'BARRA';
+  const items = [cafe, comida].map(c => PRODUCTS[c]);
+  const discount = 0.15; // combos de especiales: -15%
+  return { items, title, climax, discount };
 }
 
-const STATE = { actividad:null, tiempo:null, peso:null, tolerancia:null, history:['home'] };
+const STATE = { actividad:null, leche:null, tiempo:null, peso:null, tolerancia:null, history:['home'] };
 const stage = document.getElementById('stage');
 const screens = stage.querySelectorAll('.screen');
 
@@ -825,7 +1034,7 @@ function back() {
   go(STATE.history[STATE.history.length - 1], false);
 }
 function reset() {
-  STATE.actividad = STATE.tiempo = STATE.peso = STATE.tolerancia = null;
+  STATE.actividad = STATE.leche = STATE.tiempo = STATE.peso = STATE.tolerancia = null;
   STATE.history = ['home'];
   document.querySelectorAll('.tile').forEach(t => t.classList.remove('is-selected', 'is-tapped'));
   go('home', false);
@@ -841,7 +1050,7 @@ document.querySelectorAll('[data-action]').forEach(b => {
   });
 });
 
-const order = ['actividad','tiempo','peso','tolerancia','result'];
+const order = ['actividad','leche','tiempo','peso','tolerancia','result'];
 document.querySelectorAll('[data-options]').forEach(group => {
   const key = group.dataset.options;
   group.querySelectorAll('.tile').forEach(opt => {
@@ -865,22 +1074,18 @@ document.querySelectorAll('[data-confirm]').forEach(b => {
   b.addEventListener('click', () => { go('order'); startOrderCountdown(); });
 });
 
-function genCode() {
-  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return letters[Math.floor(Math.random()*letters.length)] + (Math.floor(Math.random()*90)+10);
-}
-let LAST_CODE = null;
 function buildResult() {
   const r = recommend(STATE);
-  document.getElementById('resultTitle').textContent = `${r.title} ${r.climax}`;
-  LAST_CODE = genCode();
-  const oc = document.getElementById('orderCode');
-  oc.textContent = LAST_CODE;
-  oc.setAttribute('data-text', LAST_CODE);
+  const comboName = `${r.title} ${r.climax}`;
+  document.getElementById('resultTitle').textContent = comboName;
+  // La pantalla final muestra el NOMBRE del combo (ya no un código).
+  const oc = document.getElementById('orderCombo');
+  oc.textContent = comboName;
+  oc.setAttribute('data-text', comboName);
 
   const wrap = document.getElementById('comboItems');
   wrap.innerHTML = '';
-  let total = 0;
+  let subtotal = 0;
   r.items.forEach(it => {
     const row = document.createElement('div');
     row.className = 'combo-item';
@@ -893,8 +1098,26 @@ function buildResult() {
       <span class="ci-price">$ ${it.price.toLocaleString('es-AR')}</span>
     `;
     wrap.appendChild(row);
-    total += it.price;
+    subtotal += it.price;
   });
+
+  let total = subtotal;
+  if (r.discount && r.discount > 0) {
+    const off = Math.round(subtotal * r.discount);
+    total = subtotal - off;
+    const pct = Math.round(r.discount * 100);
+    const row = document.createElement('div');
+    row.className = 'combo-item is-discount';
+    row.innerHTML = `
+      <span class="ci-code">%</span>
+      <div style="min-width:0;">
+        <div class="ci-name">Descuento combo</div>
+        <div class="ci-meta">−${pct}% en especiales</div>
+      </div>
+      <span class="ci-price">− $ ${off.toLocaleString('es-AR')}</span>
+    `;
+    wrap.appendChild(row);
+  }
   document.getElementById('comboTotal').textContent = '$ ' + total.toLocaleString('es-AR');
 }
 
@@ -1018,16 +1241,8 @@ function fitAllText() {
     if (!label) return;
     fitText(label, { max: 96, min: 20 });
   });
-  document.querySelectorAll('.combo-item').forEach(row => {
-    const name = row.querySelector('.ci-name');
-    const price = row.querySelector('.ci-price');
-    const code = row.querySelector('.ci-code');
-    if (!name) return;
-    const reserve = (price ? price.offsetWidth : 0)
-                  + (code ? code.offsetWidth : 0)
-                  + 80;
-    fitText(name, { max: 44, min: 12, reservedRight: reserve });
-  });
+  /* Los nombres del combo (.ci-name) ya no usan fitText: escalan con clamp y
+     bajan de línea si son largos, para no recortarse nunca en pantallas chicas. */
 }
 
 if (document.fonts && document.fonts.ready) {
