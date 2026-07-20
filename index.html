@@ -443,6 +443,16 @@ main { position: relative; overflow: hidden; display: flex; min-height: 0; }
   text-transform: uppercase;
   font-weight: 500;
 }
+.ct-right { display: flex; align-items: baseline; gap: clamp(8px, 1.4cqi, 18px); line-height: 1; }
+.ct-old {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: clamp(12px, 1.5cqi, 17px);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+.ct-old s { text-decoration: line-through; }
 .ct-amount {
   font-family: var(--display);
   font-weight: 700;
@@ -793,7 +803,10 @@ body[data-preview] .preview-tag {
         <div class="combo" id="comboItems"></div>
         <div class="combo-total">
           <span class="ct-label">Total</span>
-          <span class="ct-amount" id="comboTotal">$ 0</span>
+          <span class="ct-right">
+            <span class="ct-old" id="comboTotalOld"></span>
+            <span class="ct-amount" id="comboTotal">$ 0</span>
+          </span>
         </div>
         <button class="restart-btn" data-restart>
           <span>Bárbaro, muchas gracias</span>
@@ -844,11 +857,11 @@ body[data-preview] .preview-tag {
 
             <div class="menu-group">
               <div class="menu-group-head"><span class="mg-index">05</span><span class="mg-title">Combos</span></div>
-              <div class="menu-group-desc">Café + alimento en un solo precio. Los especiales llevan −15%.</div>
-              <div class="menu-row"><span class="mr-name">Shock Coffee + Barra<small>Café de especialidad + barra proteica: energía y 20 g de proteína para media mañana o post-entreno.</small></span><span class="mr-price">$6.400</span></div>
-              <div class="menu-row"><span class="mr-name">Shock con Leche + Barra<small>Shock con leche + barra proteica sin azúcar: un combo completo y saciante.</small></span><span class="mr-price">$7.000</span></div>
-              <div class="menu-row"><span class="mr-name">Concentración + Mix<small>Shock Concentración + mix de frutos secos: foco mental y energía que dura horas.</small><small class="mr-var">Con leche $8.075</small></span><span class="mr-price">$7.565</span></div>
-              <div class="menu-row"><span class="mr-name">Pre-Entreno + Barra<small>Shock Pre-Entreno + barra proteica: fuerza, resistencia y recuperación muscular.</small><small class="mr-var">Con leche $8.075</small></span><span class="mr-price">$7.565</span></div>
+              <div class="menu-group-desc">Café + alimento con 10% de descuento.</div>
+              <div class="menu-row"><span class="mr-name">Shock Coffee + Barra<small>Café de especialidad + barra proteica: energía y 20 g de proteína para media mañana o post-entreno.</small></span><span class="mr-price">$5.760</span></div>
+              <div class="menu-row"><span class="mr-name">Shock con Leche + Barra<small>Shock con leche + barra proteica sin azúcar: un combo completo y saciante.</small></span><span class="mr-price">$6.300</span></div>
+              <div class="menu-row"><span class="mr-name">Concentración + Mix<small>Shock Concentración + mix de frutos secos: foco mental y energía que dura horas.</small><small class="mr-var">Con leche $8.550</small></span><span class="mr-price">$8.010</span></div>
+              <div class="menu-row"><span class="mr-name">Pre-Entreno + Barra<small>Shock Pre-Entreno + barra proteica: fuerza, resistencia y recuperación muscular.</small><small class="mr-var">Con leche $8.550</small></span><span class="mr-price">$8.010</span></div>
             </div>
 
           </div>
@@ -869,57 +882,43 @@ body[data-preview] .preview-tag {
 
 <script>
 /* =================================================================
-   CATÁLOGO · precios reales del menú (jul 2026)
-   - Objetivo "entrenar"/"estudiar" → café ESPECIAL (café + aminoácidos ya
-     incluidos). "activar" → café simple, sin aminoácidos.
-   - La preparación (Q1) define solo/corto (café simple) o con/con-grande leche.
-   - Comida (Q3): estudiar → mix de frutos secos; entrenar/activar → barra.
-   - Combo de ESPECIAL + comida lleva -15% (así está en la carta).
+   CATÁLOGO · precios reales (aditivos, sin descuento)
+   Precio final = café + booster de aminoácidos (si es especial) + comida.
+   - Café: 3500 corto / 3900 solo / 4500 con leche / 4900 con leche grande.
+   - Booster de aminoácidos (concentración o pre-entreno): +2500.
+   - Barra proteica / Mix de frutos secos: 2500.
+   Objetivo (Q2): estudiar → +Booster Concentración; entrenar → +Booster
+   Pre-Entreno; activar → café solo (sin booster). Comida solo si no le molesta.
    ================================================================= */
-const PRODUCTS = {
-  // Cafés simples (objetivo "activar")
-  CORTO:     { code:'C',   name:'Shock Coffee Corto',      meta:'Café de especialidad · ristretto, más concentrado.', price:3500 },
-  COFFEE:    { code:'C',   name:'Shock Coffee',            meta:'Café de especialidad · alto en cafeína natural.',    price:3900 },
-  COFFEE_L:  { code:'C',   name:'Shock con Leche',         meta:'Café de especialidad, con leche.',                   price:4500 },
-  COFFEE_LG: { code:'C',   name:'Shock con Leche Grande',  meta:'Café de especialidad, con leche, grande.',           price:4900 },
-  // Especiales (café + aminoácidos)
-  CONC:      { code:'ESP', name:'Shock Concentración',            meta:'Shock Coffee + teanina, tirosina y colina: foco y claridad mental, sin nervios.', price:6400 },
-  CONC_L:    { code:'ESP', name:'Shock Concentración c/ Leche',   meta:'Con leche + teanina, tirosina y colina: foco y claridad mental.',                 price:7000 },
-  CONC_LG:   { code:'ESP', name:'Shock Concentración c/ Leche Grande', meta:'Con leche grande + teanina, tirosina y colina: foco y claridad.',             price:7400 },
-  PRE:       { code:'ESP', name:'Shock Pre-Entreno',             meta:'Shock Coffee + taurina, betaína, teacrina y electrolitos: energía e hidratación.', price:6400 },
-  PRE_L:     { code:'ESP', name:'Shock Pre-Entreno c/ Leche',     meta:'Con leche + taurina, betaína, teacrina y electrolitos: energía e hidratación.',    price:7000 },
-  PRE_LG:    { code:'ESP', name:'Shock Pre-Entreno c/ Leche Grande', meta:'Con leche grande + taurina, betaína, teacrina y electrolitos.',                price:7400 },
-  // Alimentos
-  BARRA:     { code:'F',   name:'Barra Proteica',      meta:'Sin azúcar, sin harinas y con 20 g de proteína.',      price:2500 },
-  MIX:       { code:'F',   name:'Mix de Frutos Secos', meta:'Energía limpia para entrenar o trabajar por horas.',   price:2500 },
+const CAFES = {
+  'solo':         { code:'C', name:'Shock Coffee',           meta:'Café de especialidad · alto en cafeína natural.',    price:3900 },
+  'solo-potente': { code:'C', name:'Shock Coffee Corto',     meta:'Café de especialidad · ristretto, más concentrado.', price:3500 },
+  'leche':        { code:'C', name:'Shock con Leche',        meta:'Café de especialidad, con leche.',                   price:4500 },
+  'leche-grande': { code:'C', name:'Shock con Leche Grande', meta:'Café de especialidad, con leche, grande.',           price:4900 },
+};
+const BOOSTERS = {
+  estudiar: { code:'B', name:'Booster Concentración', meta:'Teanina, tirosina y colina: foco y claridad mental, sin nervios.',   price:2500 },
+  entrenar: { code:'B', name:'Booster Pre-Entreno',   meta:'Taurina, betaína, teacrina y electrolitos: energía e hidratación.', price:2500 },
+};
+const FOODS = {
+  mix:   { code:'F', name:'Mix de Frutos Secos', meta:'Energía limpia para entrenar o trabajar por horas.', price:2500 },
+  barra: { code:'F', name:'Barra Proteica',      meta:'Sin azúcar, sin harinas y con 20 g de proteína.',    price:2500 },
 };
 
 function recommend({ prep, objetivo, comer }) {
-  const nivelLeche = prep === 'leche-grande' ? 'lg' : prep === 'leche' ? 'l' : 'base';
-  let cafeKey, esComida, title, climax, especial = false;
+  const cafe = CAFES[prep] || CAFES['solo'];
+  let booster = null, title, climax;
 
-  if (objetivo === 'estudiar') {
-    especial = true;
-    cafeKey = nivelLeche === 'lg' ? 'CONC_LG' : nivelLeche === 'l' ? 'CONC_L' : 'CONC';
-    title = 'Shock de'; climax = 'Concentración';
-  } else if (objetivo === 'entrenar') {
-    especial = true;
-    cafeKey = nivelLeche === 'lg' ? 'PRE_LG' : nivelLeche === 'l' ? 'PRE_L' : 'PRE';
-    title = 'Shock de'; climax = 'Fuerza';
-  } else { // activar → café simple
-    cafeKey = prep === 'solo-potente' ? 'CORTO'
-            : prep === 'leche'        ? 'COFFEE_L'
-            : prep === 'leche-grande' ? 'COFFEE_LG'
-            : 'COFFEE';
-    title = 'Shock de'; climax = 'Energía';
-  }
+  if (objetivo === 'estudiar')      { booster = BOOSTERS.estudiar; title = 'Shock de'; climax = 'Concentración'; }
+  else if (objetivo === 'entrenar') { booster = BOOSTERS.entrenar; title = 'Shock de'; climax = 'Fuerza'; }
+  else                              { title = 'Shock de'; climax = 'Energía'; } // activar → café solo, sin booster
 
-  let comidaKey = null;
-  if (comer === 'ok') comidaKey = (objetivo === 'estudiar') ? 'MIX' : 'BARRA';
+  let comida = null;
+  if (comer === 'ok') comida = (objetivo === 'estudiar') ? FOODS.mix : FOODS.barra;
 
-  const items = [cafeKey, comidaKey].filter(Boolean).map(k => PRODUCTS[k]);
-  // Combo de especial (café especial + comida) → -15%, igual que la carta.
-  const discount = (especial && comidaKey) ? 0.15 : 0;
+  // Precio aditivo (café + booster + comida). Si es COMBO (lleva comida) → -10%.
+  const items = [cafe, booster, comida].filter(Boolean);
+  const discount = comida ? 0.10 : 0;
   return { items, title, climax, discount };
 }
 
@@ -1019,21 +1018,14 @@ function buildResult() {
   });
 
   let total = subtotal;
+  const oldEl = document.getElementById('comboTotalOld');
   if (r.discount && r.discount > 0) {
     const off = Math.round(subtotal * r.discount);
     total = subtotal - off;
     const pct = Math.round(r.discount * 100);
-    const row = document.createElement('div');
-    row.className = 'combo-item is-discount';
-    row.innerHTML = `
-      <span class="ci-code">%</span>
-      <div style="min-width:0;">
-        <div class="ci-name">Descuento combo</div>
-        <div class="ci-meta">−${pct}% en especiales</div>
-      </div>
-      <span class="ci-price">− ${money(off)}</span>
-    `;
-    wrap.appendChild(row);
+    oldEl.innerHTML = `−${pct}% combo · <s>${money(subtotal)}</s>`;
+  } else {
+    oldEl.innerHTML = '';
   }
   document.getElementById('comboTotal').textContent = money(total);
 }
