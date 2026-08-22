@@ -7,6 +7,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quantico:wght@400;700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- ==== PWA · app instalable (sin barra de direcciones ni pestañas) ==== -->
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#faf9f5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Shock Kiosk">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+<!-- iPad / Safari: "Agregar a inicio" -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Shock Kiosk">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+
 <style>
 /* ================================================================
    SHOCK · KIOSK · v8 · LIGHT-ONLY
@@ -1155,6 +1169,21 @@ setTimeout(fitAllText, 50);
 setTimeout(fitAllText, 600);
 
 resetIdle();
+</script>
+
+<!-- ==== PWA · service worker ====================================
+     Chrome solo ofrece "Instalar app" si hay un service worker
+     registrado. Estrategia network-first: la tablet siempre agarra
+     la última versión publicada; el cache es solo para cuando se
+     cae el wifi del local. -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.warn('SW no registrado:', err);
+    });
+  });
+}
 </script>
 </body>
 </html>
