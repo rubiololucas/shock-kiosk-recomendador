@@ -1185,5 +1185,293 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
+<!-- ==== PWA · BOTÓN DE INSTALACIÓN + DIAGNÓSTICO ======================
+     Se dibuja SOLO cuando el kiosco corre dentro del navegador.
+     Si la tablet ya lo abrió como app instalada (display-mode standalone
+     o fullscreen), la barra no existe: el cliente del local nunca la ve.
+     No toca el flujo del recomendador: es todo position:fixed.
+     ==================================================================== -->
+<style>
+#pwaBar{
+  /* Va DENTRO de la franja del header, centrada entre el logo y el reloj.
+     Es el único lugar de la pantalla que no es un botón del kiosco: así
+     nadie toca "instalar" queriendo tocar "Ver menú" o "Recomendame". */
+  position:fixed; z-index:999999;
+  left:50%; transform:translateX(-50%);
+  top:calc(env(safe-area-inset-top, 0px) + 6px);
+  display:flex; align-items:stretch;
+  border:2px solid var(--fg, #0a0807);
+  border-radius:12px; overflow:hidden;
+  box-shadow:0 6px 22px rgba(10,8,7,.28);
+}
+#pwaBar[hidden]{ display:none; }
+#pwaInstall, #pwaDiagToggle{
+  appearance:none; -webkit-appearance:none; border:0; margin:0;
+  /* Crema con borde negro: se lee tanto sobre el panel claro
+     como sobre el panel negro del home. */
+  background:var(--bg, #faf9f5); color:var(--fg, #0a0807);
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+  font-family:var(--display, system-ui, sans-serif);
+  font-weight:700; font-size:14px; line-height:1;
+  letter-spacing:.08em; text-transform:uppercase;
+}
+#pwaInstall{ padding:11px 15px; display:flex; align-items:center; gap:9px; }
+#pwaDiagToggle{ padding:11px 14px; border-left:2px solid var(--fg, #0a0807); }
+#pwaInstall:active, #pwaDiagToggle:active{ opacity:.7; }
+#pwaDot{
+  width:9px; height:9px; border-radius:50%;
+  background:#e0a100; flex:0 0 auto;
+}
+#pwaBar.ready #pwaDot{ background:#17a34a; }
+#pwaBar.done  #pwaDot{ background:#17a34a; }
+
+#pwaDiag{
+  position:fixed; inset:0; z-index:1000000;
+  background:#0a0807; color:#faf9f5;
+  padding:calc(env(safe-area-inset-top, 0px) + 16px) 16px
+          calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display:flex; flex-direction:column; gap:12px;
+  overflow:auto; -webkit-overflow-scrolling:touch;
+}
+#pwaDiag[hidden]{ display:none; }
+#pwaDiag h3{
+  margin:0; font-family:var(--display, system-ui, sans-serif);
+  font-size:16px; letter-spacing:.1em; text-transform:uppercase;
+}
+.pwa-diag-top{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#pwaDiagBody{
+  margin:0; flex:1 1 auto; min-height:0;
+  font-family:var(--mono, ui-monospace, monospace);
+  font-size:12.5px; line-height:1.55;
+  white-space:pre-wrap; word-break:break-word;
+  background:rgba(250,249,245,.06);
+  border:1px solid rgba(250,249,245,.16);
+  border-radius:10px; padding:12px; overflow:auto;
+}
+.pwa-diag-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+.pwa-diag-actions button, #pwaDiagClose{
+  appearance:none; -webkit-appearance:none; border:1px solid rgba(250,249,245,.35);
+  background:transparent; color:#faf9f5; cursor:pointer;
+  font-family:var(--display, system-ui, sans-serif);
+  font-weight:700; font-size:13px; letter-spacing:.08em; text-transform:uppercase;
+  padding:12px 16px; border-radius:9px;
+}
+.pwa-diag-actions button:active, #pwaDiagClose:active{ opacity:.65; }
+#pwaDiagCopy{ background:#faf9f5; color:#0a0807; border-color:#faf9f5; }
+#pwaDiagClose{ padding:10px 14px; }
+</style>
+
+<div id="pwaBar" hidden>
+  <button id="pwaInstall" type="button"><span id="pwaDot"></span><span id="pwaInstallLabel">Instalar app</span></button>
+  <button id="pwaDiagToggle" type="button" aria-label="Diagnóstico">?</button>
+</div>
+
+<div id="pwaDiag" hidden>
+  <div class="pwa-diag-top">
+    <h3>Diagnóstico · instalación</h3>
+    <button id="pwaDiagClose" type="button">Cerrar</button>
+  </div>
+  <pre id="pwaDiagBody">Midiendo…</pre>
+  <div class="pwa-diag-actions">
+    <button id="pwaDiagCopy" type="button">Copiar reporte</button>
+    <button id="pwaDiagRefresh" type="button">Actualizar</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var bar     = document.getElementById('pwaBar');
+  var btn     = document.getElementById('pwaInstall');
+  var label   = document.getElementById('pwaInstallLabel');
+  var toggle  = document.getElementById('pwaDiagToggle');
+  var panel   = document.getElementById('pwaDiag');
+  var body    = document.getElementById('pwaDiagBody');
+  var closeB  = document.getElementById('pwaDiagClose');
+  var copyB   = document.getElementById('pwaDiagCopy');
+  var refrB   = document.getElementById('pwaDiagRefresh');
+
+  if (!bar || !btn) return;
+
+  var deferred = null;      // el evento beforeinstallprompt guardado
+  var bipFired = false;     // ¿Chrome llegó a considerar el sitio instalable?
+  var lastChoice = '—';
+
+  function displayMode() {
+    var modes = ['fullscreen', 'standalone', 'minimal-ui', 'window-controls-overlay'];
+    for (var i = 0; i < modes.length; i++) {
+      try {
+        if (window.matchMedia('(display-mode: ' + modes[i] + ')').matches) return modes[i];
+      } catch (e) {}
+    }
+    return 'browser';
+  }
+
+  function installed() {
+    return displayMode() !== 'browser' || window.navigator.standalone === true;
+  }
+
+  // Si ya corre como app, no dibujamos nada.
+  if (installed()) return;
+  bar.hidden = false;
+
+  // ---- el evento que Chrome dispara cuando el sitio SÍ es instalable ----
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferred = e;
+    bipFired = true;
+    bar.classList.add('ready');
+    label.textContent = 'Instalar app';
+  });
+
+  window.addEventListener('appinstalled', function () {
+    deferred = null;
+    bar.classList.add('done');
+    label.textContent = 'Instalada ✓';
+    setTimeout(function () { bar.hidden = true; }, 4000);
+  });
+
+  // ---- click en INSTALAR ----
+  btn.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    if (deferred) {
+      deferred.prompt();
+      var res = deferred.userChoice;
+      if (res && typeof res.then === 'function') {
+        res.then(function (c) {
+          lastChoice = (c && c.outcome) ? c.outcome : 'sin respuesta';
+          if (lastChoice !== 'accepted') { deferred = null; openPanel(); }
+        }).catch(function () { deferred = null; });
+      }
+      return;
+    }
+    // Chrome no ofreció instalar: mostramos por qué.
+    openPanel();
+  });
+
+  toggle.addEventListener('click', function (ev) { ev.stopPropagation(); openPanel(); });
+  closeB.addEventListener('click', function (ev) { ev.stopPropagation(); closePanel(); });
+  refrB.addEventListener('click', function (ev) { ev.stopPropagation(); render(); });
+
+  copyB.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    var txt = body.textContent || '';
+    function ok() { copyB.textContent = 'Copiado ✓'; setTimeout(function () { copyB.textContent = 'Copiar reporte'; }, 2000); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(ok).catch(fallback);
+    } else { fallback(); }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select(); ta.setSelectionRange(0, txt.length);
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok();
+      } catch (e) {
+        copyB.textContent = 'Copiá a mano ↑';
+        setTimeout(function () { copyB.textContent = 'Copiar reporte'; }, 2500);
+      }
+    }
+  });
+
+  function openPanel() { bar.style.visibility = 'hidden'; panel.hidden = false; render(); }
+  function closePanel() { panel.hidden = true; bar.style.visibility = ''; }
+
+  // ---- armado del reporte ----
+  function ua() { return navigator.userAgent || '—'; }
+  function pick(re) { var m = ua().match(re); return m ? m[1] : '—'; }
+
+  function render() {
+    body.textContent = 'Midiendo…';
+    var L = [];
+    L.push('SHOCK KIOSK · REPORTE DE INSTALACIÓN');
+    L.push('generado: ' + new Date().toString());
+    L.push('');
+    L.push('— DISPOSITIVO —');
+    L.push('Android:        ' + pick(/Android\s+([\d.]+)/));
+    L.push('Chrome:         ' + pick(/Chrome\/([\d.]+)/));
+    L.push('WebView:        ' + (/\bwv\b/.test(ua()) ? 'SÍ (no es Chrome real)' : 'no'));
+    L.push('Pantalla:       ' + window.innerWidth + '×' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x');
+    L.push('Online:         ' + (navigator.onLine ? 'sí' : 'NO'));
+    L.push('UA:             ' + ua());
+    L.push('');
+    L.push('— PÁGINA —');
+    L.push('URL:            ' + location.href);
+    L.push('Protocolo:      ' + location.protocol + (location.protocol === 'https:' ? ' ✓' : '  ✗ (necesita https)'));
+    L.push('display-mode:   ' + displayMode());
+    L.push('');
+    L.push('— CRITERIOS DE INSTALACIÓN —');
+    L.push('beforeinstallprompt disparó: ' + (bipFired ? 'SÍ ✓' : 'NO ✗'));
+    L.push('prompt disponible ahora:     ' + (deferred ? 'sí' : 'no'));
+    L.push('última respuesta al prompt:  ' + lastChoice);
+
+    var jobs = [];
+
+    // manifest
+    jobs.push(
+      fetch('./manifest.json', { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (m) {
+          return ['manifest.json:              HTTP 200 ✓',
+                  '  display:                  ' + m.display,
+                  '  start_url:                ' + m.start_url,
+                  '  iconos declarados:        ' + (m.icons ? m.icons.length : 0)].join('\n');
+        })
+        .catch(function (e) { return 'manifest.json:              ✗ ' + e.message; })
+    );
+
+    // link rel=manifest presente
+    var linkEl = document.querySelector('link[rel="manifest"]');
+    jobs.push(Promise.resolve('<link rel=manifest>:        ' + (linkEl ? 'presente ✓ (' + linkEl.getAttribute('href') + ')' : 'FALTA ✗')));
+
+    // service worker
+    jobs.push((function () {
+      if (!('serviceWorker' in navigator)) return Promise.resolve('Service Worker:             no soportado ✗');
+      return navigator.serviceWorker.getRegistration()
+        .then(function (reg) {
+          if (!reg) return 'Service Worker:             NO registrado ✗';
+          var st = reg.active ? 'active' : (reg.waiting ? 'waiting' : (reg.installing ? 'installing' : '?'));
+          return 'Service Worker:             registrado ✓ (' + st + ', scope ' + reg.scope + ')';
+        })
+        .catch(function (e) { return 'Service Worker:             ✗ ' + e.message; });
+    })());
+
+    // almacenamiento
+    jobs.push((function () {
+      if (!navigator.storage || !navigator.storage.estimate) return Promise.resolve('Almacenamiento:             no medible');
+      return navigator.storage.estimate().then(function (s) {
+        var mb = function (n) { return (n / 1048576).toFixed(1) + ' MB'; };
+        return 'Almacenamiento:             usa ' + mb(s.usage || 0) + ' de ' + mb(s.quota || 0);
+      }).catch(function () { return 'Almacenamiento:             no medible'; });
+    })());
+
+    // apps relacionadas ya instaladas
+    jobs.push((function () {
+      if (!navigator.getInstalledRelatedApps) return Promise.resolve('Apps relacionadas:          API no disponible');
+      return navigator.getInstalledRelatedApps().then(function (apps) {
+        return 'Apps relacionadas:          ' + (apps && apps.length ? apps.length + ' ya instalada(s)' : 'ninguna');
+      }).catch(function () { return 'Apps relacionadas:          no consultable'; });
+    })());
+
+    Promise.all(jobs).then(function (rows) {
+      body.textContent = L.join('\n') + '\n\n— CHEQUEOS —\n' + rows.join('\n') +
+        '\n\n— QUÉ HACER —\n' +
+        (bipFired
+          ? 'Chrome considera el sitio instalable. Tocá INSTALAR APP.'
+          : 'Chrome NO lo considera instalable todavía. Mirá arriba cuál\nde los chequeos tiene ✗. Si están todos ✓, suele ser Chrome\ndesactualizado o datos viejos del sitio en cache:\nborrá los datos del sitio, cerrá Chrome del todo y reabrí.');
+    });
+  }
+
+  // Si a los 5 segundos Chrome no dijo nada, el botón lo avisa.
+  setTimeout(function () {
+    if (!bipFired && !installed()) label.textContent = 'Instalar app';
+  }, 5000);
+})();
+</script>
 </body>
 </html>
